@@ -498,3 +498,199 @@ function hideError() {
 
 // ── Enter key shortcut ─────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter') predict(); });
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// § 6 — TOP-LEVEL TAB SWITCHER  (VSEPR ↔ XYZ Analyzer)
+// ══════════════════════════════════════════════════════════════════════════════
+
+let currentTopTab = 'vsepr'; // 'vsepr' | 'xyz'
+
+function switchTab(tab) {
+  currentTopTab = tab;
+
+  // Toggle panel visibility
+  document.getElementById('panel-vsepr').classList.toggle('hidden', tab !== 'vsepr');
+  document.getElementById('panel-xyz').classList.toggle('hidden', tab !== 'xyz');
+
+  // Highlight active top tab button
+  document.getElementById('tab-vsepr').classList.toggle('active', tab === 'vsepr');
+  document.getElementById('tab-xyz').classList.toggle('active', tab === 'xyz');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// § 7 — XYZ FILE ANALYZER
+// ══════════════════════════════════════════════════════════════════════════════
+
+let xyzSelectedFile = null;   // holds the File object chosen by the user
+let xyzAnalysisData = null;   // last successful API response
+
+// ── File selection helpers ─────────────────────────────────────────────────
+
+/** Called when a file is chosen via the Browse input */
+function xyzFileSelected(input) {
+  const file = input.files[0];
+  if (file) setXyzFile(file);
+}
+
+/** Called on dragover — highlight the drop zone */
+function xyzDragOver(event) {
+  event.preventDefault();
+  document.getElementById('drop-zone').classList.add('drag-over');
+}
+
+/** Called when the drag leaves the drop zone */
+function xyzDragLeave(event) {
+  document.getElementById('drop-zone').classList.remove('drag-over');
+}
+
+/** Called when a file is dropped onto the drop zone */
+function xyzDrop(event) {
+  event.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) setXyzFile(file);
+}
+
+/** Register the chosen file and update the filename label */
+function setXyzFile(file) {
+  xyzSelectedFile = file;
+  document.getElementById('drop-filename').textContent = file.name;
+  xyzHideError();
+  xyzHideResults();
+}
+
+// ── API call ───────────────────────────────────────────────────────────────
+
+async function analyzeXyz() {
+  xyzHideError();
+  xyzHideResults();
+
+  if (!xyzSelectedFile) {
+    xyzShowError('Please select an .xyz file first.');
+    return;
+  }
+
+  // Swap button text to show a spinner while the server is working
+  const btn = document.querySelector('#panel-xyz .predict-btn');
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span>Analyzing…';
+  btn.disabled = true;
+
+  const form = new FormData();
+  form.append('xyz_file', xyzSelectedFile);
+
+  try {
+    const response = await fetch('/analyze-xyz', {
+      method: 'POST',
+      body: form,
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      xyzShowError(data.error);
+      return;
+    }
+
+    xyzAnalysisData = data;
+    renderXyzResults(data);
+
+  } catch (err) {
+    console.error("Caught error in analyzeXyz:", err);
+    xyzShowError('Could not reach the server. Is Flask running?');
+  } finally {
+    btn.innerHTML = originalHTML;
+    btn.disabled = false;
+  }
+}
+
+// ── Result rendering ───────────────────────────────────────────────────────
+
+function renderXyzResults(data) {
+  // Populate summary card
+  document.getElementById('xyz-formula').textContent = data.formula || '—';
+  document.getElementById('xyz-atoms').textContent   = data.total_atoms;
+  document.getElementById('xyz-bonds').textContent   = data.total_bonds;
+  document.getElementById('xyz-avg').textContent     = data.avg_bond_length + ' Å';
+  document.getElementById('xyz-min').textContent     = data.min_bond_length + ' Å';
+  document.getElementById('xyz-max').textContent     = data.max_bond_length + ' Å';
+
+  // Show results section and render default tab (bonds)
+  const results = document.getElementById('xyz-results');
+  results.classList.remove('hidden');
+  results.style.animation = 'none';
+  void results.offsetWidth;
+  results.style.animation = '';
+
+  switchDetailTab('bonds');
+
+  // Scroll to results smoothly
+  setTimeout(() => results.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+}
+
+// ── Detail tab switching ───────────────────────────────────────────────────
+
+let currentDetailTab = 'bonds'; // 'bonds' | 'angles' | 'dihedrals'
+
+function switchDetailTab(tab) {
+  currentDetailTab = tab;
+
+  // Highlight active detail tab button
+  ['bonds', 'angles', 'dihedrals'].forEach(t => {
+    document.getElementById('dt-' + t).classList.toggle('active', t === tab);
+  });
+
+  if (!xyzAnalysisData) return;
+
+  const card = document.getElementById('xyz-detail-card');
+
+  if (tab === 'bonds') {
+    renderDetailRows(card, xyzAnalysisData.bonds, 'Å');
+  } else if (tab === 'angles') {
+    renderDetailRows(card, xyzAnalysisData.angles, '°');
+  } else {
+    renderDetailRows(card, xyzAnalysisData.dihedrals, '°');
+  }
+}
+
+/**
+ * Render a list of { label, value } objects into the detail card.
+ * @param {HTMLElement} container
+ * @param {Array<{label:string, value:number}>} items
+ * @param {string} unit   — 'Å' or '°'
+ */
+function renderDetailRows(container, items, unit) {
+  if (!items || items.length === 0) {
+    container.innerHTML = '<p class="xyz-empty">No data to display.</p>';
+    return;
+  }
+
+  container.innerHTML = items.map(item =>
+    `<div class="xyz-row">
+       <span class="xyz-row-label">${item.label}</span>
+       <span class="xyz-row-val">${item.value.toFixed(2)} ${unit}</span>
+     </div>`
+  ).join('');
+}
+
+// ── Error helpers ──────────────────────────────────────────────────────────
+
+function xyzShowError(msg) {
+  const box = document.getElementById('xyz-error-box');
+  document.getElementById('xyz-error-text').textContent = msg;
+  box.classList.remove('hidden');
+  box.style.animation = 'none';
+  void box.offsetWidth;
+  box.style.animation = '';
+}
+
+function xyzHideError() {
+  document.getElementById('xyz-error-box').classList.add('hidden');
+}
+
+function xyzHideResults() {
+  document.getElementById('xyz-results').classList.add('hidden');
+  xyzAnalysisData = null;
+}
