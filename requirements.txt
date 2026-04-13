@@ -1,2 +1,3 @@
-flask
-gunicorn
+git add .
+git commit -m "added numpy"
+git push
