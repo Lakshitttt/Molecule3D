@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Molecule3D — Bond Predictor &amp; Analyzer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- Decorative background blobs (unchanged from v2) -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <div class="wrapper">
+
+    <!-- ── Header ── -->
+    <header class="header">
+      <div class="header-icon">⬡</div>
+      <h1 class="title">Molecule3D</h1>
+      <p class="subtitle">VSEPR Predictor · XYZ Molecular Analyzer · 3D Viewer</p>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TOP-LEVEL TAB SWITCHER
+         Tab A: VSEPR Geometry Predictor  (original v2 feature)
+         Tab B: XYZ File Analyzer         (new v3 feature)
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="mode-toggle" id="top-tabs">
+      <button class="mode-btn active" id="tab-vsepr" onclick="switchTab('vsepr')">
+        <span class="btn-icon">🧪</span> Geometry Predictor
+      </button>
+      <button class="mode-btn" id="tab-xyz" onclick="switchTab('xyz')">
+        <span class="btn-icon">📂</span> XYZ File Analyzer
+      </button>
+    </div>
+
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PANEL A — VSEPR GEOMETRY PREDICTOR  (v2, fully preserved)
+    ══════════════════════════════════════════════════════════════ -->
+    <div id="panel-vsepr">
+
+      <!-- Mode Toggle (molecule vs manual) -->
+      <div class="mode-toggle" style="margin-top:0;">
+        <button class="mode-btn active" id="btn-molecule" onclick="switchMode('molecule')">
+          <span class="btn-icon">🧪</span> Enter Molecule
+        </button>
+        <button class="mode-btn" id="btn-manual" onclick="switchMode('manual')">
+          <span class="btn-icon">🔢</span> Enter Bond &amp; Lone Pairs
+        </button>
+      </div>
+
+      <!-- Input Card -->
+      <div class="card" id="input-card">
+
+        <!-- Molecule mode -->
+        <div id="section-molecule" class="input-section">
+          <label class="input-label" for="molecule-input">Molecule Formula</label>
+          <input
+            id="molecule-input"
+            class="input-field"
+            type="text"
+            placeholder="e.g. CH4, NH3, H2O…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="hint">Supported: CH4, NH3, H2O, CO2, BF3 and many more</p>
+        </div>
+
+        <!-- Manual mode (hidden by default) -->
+        <div id="section-manual" class="input-section hidden">
+          <div class="pair-inputs">
+            <div class="pair-group">
+              <label class="input-label" for="bond-pairs">Bond Pairs</label>
+              <input id="bond-pairs" class="input-field" type="number" min="0" max="6" placeholder="e.g. 4" />
+            </div>
+            <div class="pair-group">
+              <label class="input-label" for="lone-pairs">Lone Pairs</label>
+              <input id="lone-pairs" class="input-field" type="number" min="0" max="4" placeholder="e.g. 0" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div id="error-box" class="error-box hidden">
+          <span class="error-icon">⚠</span>
+          <span id="error-text"></span>
+        </div>
+
+        <button class="predict-btn" onclick="predict()">
+          Predict Geometry
+          <span class="btn-arrow">→</span>
+        </button>
+      </div>
+
+      <!-- Result Card -->
+      <div class="result-card hidden" id="result-card">
+        <div class="result-header">
+          <span class="result-label">Predicted Geometry</span>
+          <span class="result-geometry" id="res-geometry">—</span>
+        </div>
+        <div class="result-grid">
+          <div class="result-item">
+            <span class="item-label">Bond Angle</span>
+            <span class="item-value" id="res-angle">—</span>
+          </div>
+          <div class="result-item">
+            <span class="item-label">Hybridization</span>
+            <span class="item-value" id="res-hybrid">—</span>
+          </div>
+          <div class="result-item">
+            <span class="item-label">Bond Pairs</span>
+            <span class="item-value" id="res-bp">—</span>
+          </div>
+          <div class="result-item">
+            <span class="item-label">Lone Pairs</span>
+            <span class="item-value" id="res-lp">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3D Viewer Card -->
+      <div class="viewer-card hidden" id="viewer-card">
+        <div class="viewer-header">
+          <span class="viewer-label">3D Structure</span>
+          <span class="viewer-tip">Drag to rotate · Scroll to zoom</span>
+        </div>
+        <div class="viewer-wrap">
+          <canvas id="mol-canvas"></canvas>
+          <div class="legend">
+            <span class="legend-dot central"></span><span class="legend-text">Central atom</span>
+            <span class="legend-dot bonded"></span><span class="legend-text">Bonded atom</span>
+            <span class="legend-dot lone"></span><span class="legend-text">Lone pair</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /#panel-vsepr -->
+
+
+    <!-- ══════════════════════════════════════════════════════════════
+         PANEL B — XYZ FILE ANALYZER  (new feature, v2 design style)
+    ══════════════════════════════════════════════════════════════ -->
+    <div id="panel-xyz" class="hidden">
+
+      <!-- Upload Card -->
+      <div class="card" id="xyz-upload-card">
+        <label class="input-label">Upload XYZ File</label>
+
+        <!-- Drop-zone -->
+        <div class="drop-zone" id="drop-zone"
+             ondragover="xyzDragOver(event)"
+             ondragleave="xyzDragLeave(event)"
+             ondrop="xyzDrop(event)">
+          <div class="drop-icon">📄</div>
+          <p class="drop-text">Drag &amp; drop your <strong>.xyz</strong> file here</p>
+          <p class="drop-sub">or</p>
+          <label class="drop-browse" for="xyz-file-input">Browse file</label>
+          <input id="xyz-file-input" type="file" accept=".xyz" style="display:none"
+                 onchange="xyzFileSelected(this)" />
+          <p class="drop-filename" id="drop-filename">No file selected</p>
+        </div>
+
+        <!-- Format hint -->
+        <details class="xyz-hint">
+          <summary>ℹ️ XYZ format</summary>
+          <pre class="hint-pre">5
+Methane (CH4)
+C   0.000   0.000   0.000
+H   0.629   0.629   0.629
+H  -0.629  -0.629   0.629
+H  -0.629   0.629  -0.629
+H   0.629  -0.629  -0.629</pre>
+        </details>
+
+        <!-- XYZ error -->
+        <div id="xyz-error-box" class="error-box hidden">
+          <span class="error-icon">⚠</span>
+          <span id="xyz-error-text"></span>
+        </div>
+
+        <button class="predict-btn" onclick="analyzeXyz()">
+          Analyze Molecule
+          <span class="btn-arrow">→</span>
+        </button>
+      </div>
+
+      <!-- ── XYZ Results (hidden until analysis completes) ── -->
+      <div id="xyz-results" class="hidden">
+
+        <!-- Summary Card -->
+        <div class="result-card" id="xyz-summary-card">
+          <div class="result-header">
+            <span class="result-label">Molecular Summary</span>
+            <span class="result-geometry" id="xyz-formula">—</span>
+          </div>
+          <div class="result-grid">
+            <div class="result-item">
+              <span class="item-label">Total Atoms</span>
+              <span class="item-value" id="xyz-atoms">—</span>
+            </div>
+            <div class="result-item">
+              <span class="item-label">Total Bonds</span>
+              <span class="item-value" id="xyz-bonds">—</span>
+            </div>
+            <div class="result-item">
+              <span class="item-label">Avg Bond Length</span>
+              <span class="item-value" id="xyz-avg">—</span>
+            </div>
+            <div class="result-item">
+              <span class="item-label">Shortest Bond</span>
+              <span class="item-value" id="xyz-min">—</span>
+            </div>
+            <div class="result-item">
+              <span class="item-label">Longest Bond</span>
+              <span class="item-value" id="xyz-max">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail sections: Bond Lengths / Angles / Dihedrals -->
+        <div class="xyz-detail-tabs">
+          <button class="detail-tab active" id="dt-bonds"   onclick="switchDetailTab('bonds')">🔗 Bond Lengths</button>
+          <button class="detail-tab"        id="dt-angles"  onclick="switchDetailTab('angles')">📐 Bond Angles</button>
+          <button class="detail-tab"        id="dt-dihedrals"  onclick="switchDetailTab('dihedrals')">🔄 Dihedrals</button>
+        </div>
+
+        <div class="card xyz-detail-card" id="xyz-detail-card">
+          <!-- populated dynamically -->
+        </div>
+
+      </div><!-- /#xyz-results -->
+
+    </div><!-- /#panel-xyz -->
+
+
+    <footer class="footer">
+      VSEPR Theory · Flask &amp; Vanilla JS · 3D via Three.js r128 · XYZ Analyzer
+    </footer>
+  </div><!-- /.wrapper -->
+
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
